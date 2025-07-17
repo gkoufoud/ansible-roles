@@ -16,11 +16,6 @@
   register: template_node
   delegate_to: "{{ api_host }}"
 
-
-# - name: show var
-#   debug:
-#     msg: "{{ template_node }}"
-
 - name: Create VMs
   community.general.proxmox_kvm:
     api_user: "{{ api_user }}"

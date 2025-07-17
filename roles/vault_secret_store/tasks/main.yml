@@ -1,0 +1,28 @@
+- name: Ensure required variables are defined
+  ansible.builtin.assert:
+    that:
+      - vault_mount_point is defined
+      - vault_token is defined or (vault_token_key is defined and vault_token_file_path is defined)
+    fail_msg: >
+      Required variables not set. Ensure you define 'vault_secrets', vault_mount_point, and vault_token or vault_token_key and vault_token_file_path.
+  tags: always
+
+- name: Retrieve token
+  when: vault_token is not defined
+  block:
+    - name: Read token file
+      ansible.builtin.command: >
+        awk -F= '$1=="{{ vault_token_key }}" {print $2}' {{ vault_token_file_path }}
+      register: token_result
+      changed_when: false
+    
+    - name: Register token
+      ansible.builtin.set_fact:
+        vault_token: "{{ token_result.stdout }}"
+
+- name: Process each Vault secret
+  ansible.builtin.include_tasks: secret.yml
+  loop: "{{ vault_secrets }}"
+  no_log: true
+  loop_control:
+    loop_var: vault_secret

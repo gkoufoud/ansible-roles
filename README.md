@@ -2,7 +2,10 @@
 This repository contains a list of ansible roles.
 ##Roles
 - [proxmox_template](#proxmox_template)
+- [vault_secret_store](#vault_secret_store)
 - [proxmox_vm](#proxmox_vm)
+- [docker_install](#docker_install)
+- [vault](#vault)
 
 ### `proxmox_template`
 Create a proxmox VM template
@@ -42,6 +45,37 @@ vars:
     username: "user"
     password: "password"
 ```
+### `vault_secret_store`
+Store/Update secrets in hashicorp vault
+
+#### Required Variables
+- `vault_secrets`: A list of maps with vault secrets
+- `vault_mount_point` The vault mount poin (path) to store the secrets to
+- `vault_token`: The vault token (required when vault_token_key and vault_token_file_path are not defined)
+- `vault_token_file_path`: The file where the vault token is saved (required when vault_token is not defined)
+- `vault_token_key`: Key in the vault token file where the token is defined (required when vault_token is not defined)
+
+#### Optional Variables
+- `force_update`: Default is `true`
+  
+#### Example
+```yaml
+vars:
+  vault_mount_point: homelab
+  vault_token_file_path: /opt/vault/tokens/init
+  vault_token_key: init_token
+  vault_secrets:
+    - name: "cloudflare"
+      data:
+        CLOUDFLARE_API_KEY: "my_cf_api_key"
+        CLOUDFLARE_EMAIL: "my_cf_email"
+        CLOUDFLARE_API_TOKEN: "my_cf_api_token"
+    - name: "localregistry"
+      data:
+        REGISTRY_ADMIN_USER: "admin"
+        REGISTRY_ADMIN_PASS: "my_admin_pass_123"
+```
+
 ### `proxmox_vm`
 Create proxmox virtual machines from a template
 
@@ -87,3 +121,34 @@ vars:
       ciuser: "myuser"
       cipassword: "mynewpass123"
 ```
+### `docker_install`
+Install required packages
+
+### `vault`
+Install hashicorp vault
+
+#### Required Variables
+- `base_dir`: The vault directory (e.g., `/opt/vault`)
+
+#### Optional Variables
+- `default_lease_ttl`: Default is `168h`
+- `max_lease_ttl`: Default is `720h`
+- `userid`: Default is `100`
+- `groupid`: Default is `100`
+- `container_name`: Default is `vault`
+- `image`: Default is `hashicorp/vault:1.19`
+- `listen_port`: Default is `8200`
+  
+#### Example
+```yaml
+vars:
+  base_dir: /opt/vault
+  default_lease_ttl: 168h
+  max_lease_ttl: 720h
+  userid: 100
+  groupid: 100
+  container_name: vault
+  image: hashicorp/vault:1.19
+  listen_port: 8200
+```
+
