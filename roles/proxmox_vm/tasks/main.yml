@@ -1,0 +1,82 @@
+- name: Ensure required variables are defined
+  ansible.builtin.assert:
+    that:
+      - api_user is defined
+      - api_password is defined
+      - api_host is defined
+      - template_name is defined
+      - vms is defined
+    fail_msg: >
+      Required variables not set. Ensure you define 'api_user', 'api_password', 'api_host', 'template_name', and 'vms'.
+  tags: always
+
+- name: Get template node
+  command: >-
+    sh -ec "pvesh get /cluster/resources --type vm | grep ' {{ template_name }}' | awk -F'│' '{print $20}' | sed 's/ //g' | tr -d '\n'"
+  register: template_node
+  delegate_to: "{{ api_host }}"
+
+
+# - name: show var
+#   debug:
+#     msg: "{{ template_node }}"
+
+- name: Create VMs
+  community.general.proxmox_kvm:
+    api_user: "{{ api_user }}"
+    api_password: "{{ api_password }}"
+    api_host: "{{ api_host }}"
+    clone: "{{ template_name }}"
+    newid: "{{ item.vmid }}"
+    name: "{{ item.name }}"
+    node: "{{ template_node.stdout }}"
+    target: "{{ item.pve_node }}"
+    storage: "{{ item.storage }}"
+    kvm : true
+    format: qcow2
+    full: true
+    cores: "{{ item.cpu_cores }}"
+    balloon: "{{ item.memory_balloon }}"
+    timeout: 300
+    state: present
+  loop: "{{ vms }}"
+  delegate_to: localhost
+
+
+- name: Update VM
+  community.general.proxmox_kvm:
+    node: "{{ item.pve_node }}"
+    api_user: "{{ api_user }}"
+    api_password: "{{ api_password }}"
+    api_host: "{{ api_host }}"
+    vmid: "{{ item.vmid }}"
+    ipconfig:
+      ipconfig0: "{{ item.ipconfig0 }}"
+    ciuser: "{{ item.ciuser }}"
+    cipassword: "{{ item.cipassword }}"
+    sshkeys: "{{ lookup('ansible.builtin.file', '~/.ssh/id_rsa.pub') }}"
+    nameservers: "{{ item.nameservers }}"
+    update: yes
+  loop: "{{ vms }}"
+  delegate_to: localhost
+
+- name: Start VM
+  community.general.proxmox_kvm:
+    node: "{{ item.pve_node }}"
+    api_user: "{{ api_user }}"
+    api_password: "{{ api_password }}"
+    api_host: "{{ api_host }}"
+    vmid: "{{ item.vmid }}"
+    state: started
+  loop: "{{ vms }}"
+  delegate_to: localhost
+
+- name: Wait for SSH to be available
+  ansible.builtin.wait_for:
+    port: 22
+    host: "{{ ansible_host }}"
+    search_regex: OpenSSH
+    delay: 2
+    timeout: 300
+  delegate_to: localhost
+  run_once: true
