@@ -1,0 +1,4 @@
+api_port: 8006
+cloud_image_name: "debian-12-genericcloud-amd64"
+cloud_image_version: "20250530-2128"
+cloud_image_distro: "bookworm"

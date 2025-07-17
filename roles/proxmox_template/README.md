@@ -1,9 +1,3 @@
-# ansible-roles
-This repository contains a list of ansible roles.
-##Roles
-- [proxmox_template](#proxmox_template)
-
-### `proxmox_template`
 Create a proxmox VM template
 
 #### Required Variables
