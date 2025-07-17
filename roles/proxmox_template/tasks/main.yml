@@ -1,0 +1,163 @@
+- name: Ensure required variables are defined
+  ansible.builtin.assert:
+    that:
+      - api_user
+      - api_password
+      - api_host
+      - storage_name
+      - configuration
+      - configuration.name
+      - configuration.node
+      - configuration.id
+      - configuration.disk_size
+      - configuration.username
+      - configuration.password
+    fail_msg: >
+      Required variables not set. Ensure you define 'api_user', 'api_password', 'api_host', 'configuration', 'configuration.name', 'configuration.node', and 'configuration.id'.
+  tags: always
+
+
+- name: Download linux image
+  ansible.builtin.get_url:
+    url: "https://cloud.debian.org/images/cloud/{{ cloud_image_distro }}/{{ cloud_image_version }}/{{ cloud_image_name }}-{{ cloud_image_version }}.qcow2"
+    dest: "/mnt/pve/{{ storage_name }}/template/iso/{{ cloud_image_name }}-{{ cloud_image_version }}.qcow2"
+    mode: '0644'
+  delegate_to: "{{ api_host }}"
+
+
+- name: Create new VM for template
+  community.general.proxmox_kvm:
+    api_user: "{{ api_user }}"
+    api_password: "{{ api_password }}"
+    api_host: "{{ api_host }}"
+    api_port: "{{ api_port }}"
+    name: "{{ configuration.name }}"
+    node: "{{ configuration.node }}"
+    vmid: "{{ configuration.id }}"
+    agent: "enabled=1"
+    balloon: 4096
+    memory: 4096
+    cores: 1
+    ostype: "l26"
+    scsihw: "virtio-scsi-single"
+    bios: "seabios"
+    net:
+      net0: 'virtio,bridge=vmbr0'
+    vga: "serial0"
+    serial:
+      serial0: "socket"
+    boot: "order=scsi0;net0"
+    state: present
+  delegate_to: localhost
+
+- name: Wait until VM {{ configuration.id }} is created and reachable
+  ansible.builtin.shell: qm status {{ configuration.id }}
+  register: vm_status
+  until: vm_status.rc == 0
+  retries: 30
+  delay: 5
+  delegate_to: "{{ api_host }}"
+
+- name: Convert VM to template
+  community.general.proxmox_kvm:
+    api_user: "{{ api_user }}"
+    api_password: "{{ api_password }}"
+    api_host: "{{ api_host }}"
+    api_port: "{{ api_port }}"
+    name: "{{ configuration.name }}"
+    node: "{{ configuration.node }}"
+    state: template
+  retries: 30
+  delay: 5
+  delegate_to: localhost
+
+- name: Get VM configuration
+  ansible.builtin.shell: qm config {{ configuration.id }}
+  register: vm_config
+  delegate_to: "{{ api_host }}"
+
+- name: Check if scsi0 is present
+  ansible.builtin.set_fact:
+    has_scsi0_disk: "{{ 'scsi0:' in vm_config.stdout }}"
+
+- name: Check if unused0 is present
+  ansible.builtin.set_fact:
+    has_unused0_disk: "{{ 'unused0:' in vm_config.stdout }}"
+
+- name: Check if cloudinit is present
+  ansible.builtin.set_fact:
+    has_cloudinit_disk: "{{ 'ide2:' in vm_config.stdout }}"
+
+- name: Import disk
+  ansible.builtin.shell: |
+    qm importdisk {{ configuration.id }} /mnt/pve/{{ storage_name }}/template/iso/{{ cloud_image_name }}-{{ cloud_image_version }}.qcow2 {{ storage_name }} --format qcow2
+  when: not has_scsi0_disk and not has_unused0_disk
+  delegate_to: "{{ api_host }}"
+
+- name: Set has_unused0_disk
+  ansible.builtin.set_fact:
+    has_unused0_disk: true
+  when: not has_scsi0_disk and not has_unused0_disk
+
+- name: Attach existing unattached disk to scsi0
+  ansible.builtin.shell: |
+    qm set {{ configuration.id }} --scsi0 {{ storage_name }}:{{ configuration.id }}/vm-{{ configuration.id }}-disk-0.qcow2
+    qm set {{ configuration.id }} --boot order='scsi0;net0'
+  when: not has_scsi0_disk and has_unused0_disk
+  delegate_to: "{{ api_host }}"
+
+- name: Attach cloudinit
+  ansible.builtin.shell: |
+    qm set {{ configuration.id }} --ide2 {{ storage_name }}:cloudinit
+  when: not has_cloudinit_disk
+  delegate_to: "{{ api_host }}"
+
+- name: Update disk
+  community.general.proxmox_disk:
+    api_user: "{{ api_user }}"
+    api_password: "{{ api_password }}"
+    api_host: "{{ api_host }}"
+    api_port: "{{ api_port }}"
+    vmid: "{{ configuration.id }}"
+    disk: scsi0
+    format: qcow2
+    backup: false
+    cache: "unsafe"
+    ro: false
+    storage: "{{ storage_name }}"
+    state: present
+  delegate_to: localhost
+
+- name: Resize disk
+  community.general.proxmox_disk:
+    api_user: "{{ api_user }}"
+    api_password: "{{ api_password }}"
+    api_host: "{{ api_host }}"
+    api_port: "{{ api_port }}"
+    vmid: "{{ configuration.id }}"
+    disk: scsi0
+    format: qcow2
+    backup: false
+    cache: "unsafe"
+    ro: false
+    size: "{{ configuration.disk_size }}"
+    state: resized
+  delegate_to: localhost
+
+
+- name: Update template
+  community.general.proxmox_kvm:
+    node: "{{ configuration.node }}"
+    api_user: "{{ api_user }}"
+    api_password: "{{ api_password }}"
+    api_host: "{{ api_host }}"
+    api_port: "{{ api_port }}"
+    vmid: "{{ configuration.id }}"
+    ipconfig:
+      ipconfig0: "ip=dhcp"
+    ciuser: "{{ configuration.username }}"
+    cipassword: "{{ configuration.password }}"
+    sshkeys: "{{ lookup('ansible.builtin.file', '~/.ssh/id_rsa.pub') }}"
+    nameservers: "8.8.8.8"
+    update: yes
+  delegate_to: localhost
