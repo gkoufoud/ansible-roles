@@ -1,0 +1,107 @@
+#!/bin/bash
+set -eETo pipefail
+
+failure() {
+  local lineno="$1"
+  local msg="$2"
+  echo "Failed at $lineno: $msg"
+}
+trap 'failure ${LINENO} "$BASH_COMMAND"' ERR
+
+cd {{ base_dir }}
+
+function create_homelab_token() {
+    docker exec \
+    -e VAULT_ADDR=http://127.0.0.1:8200 \
+    -e VAULT_TOKEN="${vault_token}" \
+    {{ container_name }} \
+    vault token create \
+        -policy=homelab-admin \
+        -orphan \
+        -period=0 \
+        -display-name="homelab-root" \
+        -format=json > tokens/homelab_token.json
+}
+
+# Wait for vault container
+sleep 5
+vault_container_state=$(docker inspect {{ container_name }} | jq -r '.[].State')
+vault_container_state_running=$(echo "$vault_container_state" | jq -r '.Running')
+vault_container_state_restarting=$(echo "$vault_container_state" | jq -r '.Restarting')
+
+if [[ "$vault_container_state_running" != "true" ]]; then
+    echo "Vault container is not running"
+    exit 1
+fi
+
+if [[ "$vault_container_state_restarting" != "false" ]]; then
+    echo "Vault container is restarting"
+    exit 1
+fi
+
+
+vault_status=$(docker exec -it -e "VAULT_ADDR=http://127.0.0.1:8200" {{ container_name }} vault status -format=json) || true
+
+vault_initialized=$(echo "$vault_status" | jq -r '.initialized')
+vault_sealed=$(echo "$vault_status" | jq -r '.sealed')
+
+if [[ "$vault_initialized" == "false" ]]; then
+    docker exec -e VAULT_ADDR=http://127.0.0.1:8200 {{ container_name }} vault operator init -key-shares=1 -key-threshold=1 -format=json > vault_init.json
+fi
+
+if [[ "$vault_sealed" == "true" ]]; then
+    unseal_key=$(jq -r '.unseal_keys_hex[0]' < vault_init.json)
+    docker exec -e VAULT_ADDR=http://127.0.0.1:8200 {{ container_name }} vault operator unseal "${unseal_key}"
+fi
+
+vault_token=$(jq -r '.root_token' < vault_init.json)
+cat {{ vault.base_dir }}/homelab-admin.hcl | docker exec -i \
+  -e VAULT_ADDR=http://127.0.0.1:8200 \
+  -e VAULT_TOKEN="${vault_token}" \
+  {{ container_name }} \
+  vault policy write homelab-admin -
+
+
+if ! vault_homelab_token=$(jq -r '.auth.client_token' 2>/dev/null < tokens/homelab_token.json); then
+    create_homelab_token
+else
+    # Check token
+    if docker exec -e VAULT_ADDR=http://127.0.0.1:8200 -e VAULT_TOKEN="$vault_homelab_token" {{ container_name }} vault token lookup >/dev/null 2>&1; then
+        echo "Token is valid"
+    else
+        echo "Token is missing or invalid — re-generating..."
+        create_homelab_token
+    fi
+fi
+
+vault_homelab_token=$(jq -r '.auth.client_token' 2>/dev/null < tokens/homelab_token.json)
+
+path_exist=$(docker exec \
+  -e VAULT_ADDR=http://127.0.0.1:8200 \
+  -e VAULT_TOKEN="${vault_homelab_token}" \
+  {{ container_name }} \
+  vault secrets list -format=json | jq '."homelab/"')
+
+if [[ "$path_exist" == "null" ]]; then
+docker exec \
+  -e VAULT_ADDR=http://127.0.0.1:8200 \
+  -e VAULT_TOKEN="${vault_homelab_token}" \
+  {{ container_name }} \
+  vault secrets enable -path=homelab -version=2 kv
+fi
+
+docker exec \
+  -e VAULT_ADDR=http://127.0.0.1:8200 \
+  -e VAULT_TOKEN="${vault_homelab_token}" \
+  {{ container_name }} \
+  vault kv put homelab/certbot \
+    CLOUDFLARE_EMAIL="${CLOUDFLARE_EMAIL:-}" \
+    CLOUDFLARE_API_KEY="${CLOUDFLARE_API_KEY:-}"
+
+docker exec \
+  -e VAULT_ADDR=http://127.0.0.1:8200 \
+  -e VAULT_TOKEN="${vault_homelab_token}" \
+  {{ container_name }} \
+  vault kv put homelab/localregistry \
+    REGISTRY_USER="${REGISTRY_USER:-}" \
+    REGISTRY_PASSWORD="${REGISTRY_PASSWORD:-}"
