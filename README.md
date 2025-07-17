@@ -31,8 +31,13 @@ vars:
   api_user: "root@pam"
   api_password: "mypassword"
   api_host: 192.168.1.50
+  api_port: 8006
+  storage_name: VM-DISKS
   configuration:
     name: debian_template
     node: pve1
     id: 9000
+    disk_size: "80G"
+    username: "user"
+    password: "password"
 ```
