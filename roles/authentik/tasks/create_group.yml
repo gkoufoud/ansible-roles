@@ -1,0 +1,22 @@
+- name: Check if Authentik group exists
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/core/groups/?name={{ item.name }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: existing_group
+
+- name: Create Authentik group
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/core/groups/"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+    status_code: 201,409
+  when: existing_group.json.results | length == 0

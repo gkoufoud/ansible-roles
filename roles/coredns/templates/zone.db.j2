@@ -1,0 +1,14 @@
+$ORIGIN {{ zone.name }}.
+$TTL 60
+@   IN  SOA dns.{{ zone.name }}. admin.{{ zone.name }}. (
+        {{ '%y%m%d%H%M' | strftime }} ; serial
+        300        ; refresh
+        60         ; retry
+        300        ; expire
+        60 )       ; minimum TTL
+
+    IN  NS  dns.{{ zone.name }}.
+
+{% for host, ip in zone.hosts.items() %}
+{{ host }}    IN  A   {{ ip }}
+{% endfor %}

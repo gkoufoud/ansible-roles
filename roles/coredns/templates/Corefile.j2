@@ -1,0 +1,15 @@
+{% for zone in zones %}
+{{ zone.name }} {
+    file /zones/{{ zone.file }}
+    reload
+    log
+    errors
+}
+{% endfor %}
+
+. {
+    forward . {{ upstream_dns | join(' ') }}
+    reload
+    log
+    errors
+}
