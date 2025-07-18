@@ -1,2 +1,4 @@
 # ansible-roles
-This repository contains a list of ansible roles.
+This repository contains a list of ansible roles for installing and configuring software.
+
+The roles are deployed in docker containers.

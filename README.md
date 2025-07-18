@@ -1,6 +1,9 @@
 # ansible-roles
-This repository contains a list of ansible roles.
-##Roles
+This repository contains a list of ansible roles for installing and configuring software.
+
+The roles are deployed in docker containers.
+
+## `Roles`
 - [authentik](#authentik)
 - [cf_ddns](#cf_ddns)
 - [coredns](#coredns)
