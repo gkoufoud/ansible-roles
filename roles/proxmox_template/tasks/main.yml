@@ -14,7 +14,6 @@
       - configuration.password
     fail_msg: >
       Required variables not set. Ensure you define 'api_user', 'api_password', 'api_host', 'configuration', 'configuration.name', 'configuration.node', and 'configuration.id'.
-  tags: always
 
 
 - name: Download linux image

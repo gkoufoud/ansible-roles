@@ -1,0 +1,53 @@
+- name: Ensure required variables are defined
+  ansible.builtin.assert:
+    that:
+      - base_dir is defined
+      - domain is defined
+      - hostname is defined
+      - admin_user is defined
+      - admin_password is defined
+      - admin_api_token is defined
+      - csrf_secret is defined
+      - session_secret is defined
+      - interfaces is defined
+      - not oidc_enabled or (oidc_client_id is defined and oidc_client_secret is defined)
+    fail_msg: >
+      Required variables not set. Ensure you define 'base_dir', 'domain', 'hostname', 'admin_user', 'admin_password', 'admin_api_token', 'csrf_secret', 'session_secret', 'oidc variables', and 'interfaces'.
+
+- name: Gather facts from the node
+  ansible.builtin.setup:
+  run_once: true
+
+- name: Create Wireguard directories
+  file:
+    path: "{{ base_dir }}/{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - ''
+    - 'etc'
+    - 'data'
+    - 'config'
+
+- name: Render docker-compose.yml.j2
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ base_dir }}/docker-compose.yml"
+    mode: "0644"
+
+- name: Render config.yaml.j2
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ base_dir }}/config/config.yaml"
+    mode: "0644"
+
+- name: Start wireguard
+  ansible.builtin.shell: docker compose up -d
+  args:
+    chdir: "{{ base_dir }}"
+
+- name: Create interfaces
+  include_tasks: create_interface.yml
+  loop: "{{ interfaces }}"
+  loop_control:
+    label: "{{ item.name }}"

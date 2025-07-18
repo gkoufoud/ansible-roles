@@ -1,0 +1,56 @@
+- name: Ensure required variables are defined
+  ansible.builtin.assert:
+    that:
+      - base_dir is defined
+      - domain is defined
+    fail_msg: >
+      Required variables not set. Ensure you define 'base_dir', and 'domain'.
+
+- name: Create cloudflare ddns directories
+  file:
+    path: "{{ base_dir }}/{{ item }}"
+    state: directory
+    mode: '0600'
+  loop:
+    - ''
+
+- name: Render env
+  template:
+    src: "env.j2"
+    dest: "{{ base_dir }}/.env"
+    mode: '0600'
+
+- name: Copy docker-compose.yml
+  copy:
+    src: docker-compose.yml
+    dest: "{{ base_dir }}/docker-compose.yml"
+    mode: '0644'
+
+- name: Start cloudflare ddns container
+  ansible.builtin.shell: docker compose up -d
+  args:
+    chdir: "{{ base_dir }}"
+
+- name: Create a CAA record for letsencrypt
+  community.general.cloudflare_dns:
+    zone: "{{ domain }}"
+    record: "{{ domain }}"
+    type: CAA
+    flag: 0
+    tag: issue
+    value: letsencrypt.org
+    ttl: 300
+    api_token: "{{ CLOUDFLARE_API_TOKEN }}"
+  when: create_le_caa
+
+- name: Create CNAME records to "{{ domain }}"
+  community.general.cloudflare_dns:
+    zone: "{{ domain }}"
+    type: CNAME
+    name: "{{ item }}"
+    ttl: 300
+    content: "{{ domain }}"
+    api_token: "{{ CLOUDFLARE_API_TOKEN }}"
+    proxied: no
+    state: present
+  loop: "{{ cnames }}"

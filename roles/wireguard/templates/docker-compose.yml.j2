@@ -1,0 +1,12 @@
+services:
+  wg-portal:
+    image: "{{ image }}"
+    container_name: "{{ container_name }}"
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - "{{ base_dir }}/etc:/etc/wireguard"
+      - "{{ base_dir }}/data:/app/data"
+      - "{{ base_dir }}/config/config.yaml:/app/config/config.yaml:ro"
+    network_mode: "host"
+    restart: unless-stopped

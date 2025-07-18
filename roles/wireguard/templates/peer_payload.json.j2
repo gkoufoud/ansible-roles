@@ -1,0 +1,23 @@
+{
+  "Addresses": {{ user_template.json.Addresses | to_json }},
+  "AllowedIPs": {{ user_template.json.AllowedIPs | to_json }},
+  "Disabled": false,
+  "DisabledReason": "",
+  "DisplayName": "{{ peer.name }}",
+  "Dns": {{ user_template.json.Dns | to_json }},
+  "DnsSearch": {{ user_template.json.DnsSearch | to_json }},
+  "Endpoint": {{ user_template.json.Endpoint | to_json }},
+  "EndpointPublicKey": {{ user_template.json.EndpointPublicKey | to_json }},
+  "ExtraAllowedIPs": {{ user_template.json.ExtraAllowedIPs | to_json }},
+  "FirewallMark": {{ user_template.json.FirewallMark | to_json }},
+  "Identifier": {{ user_template.json.Identifier | to_json }},
+  "InterfaceIdentifier": "{{ interface_name }}",
+  "Mode": "client",
+  "Mtu": {{ user_template.json.Mtu | to_json }},
+  "PersistentKeepalive": {{ user_template.json.PersistentKeepalive | to_json }},
+  "PresharedKey": "{{ user_template.json.PresharedKey }}",
+  "PrivateKey": "{{ user_template.json.PrivateKey }}",
+  "PublicKey": "{{ user_template.json.PublicKey }}",
+  "RoutingTable": {{ user_template.json.RoutingTable | to_json }},
+  "UserIdentifier": "{{ user_template.json.UserIdentifier }}"
+}

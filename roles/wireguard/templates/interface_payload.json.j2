@@ -1,0 +1,23 @@
+{
+  "Addresses": ["{{ item.cidr | ansible.utils.ipaddr('1') }}"],
+  "Disabled": false,
+  "DisabledReason": "",
+  "DisplayName": "{{ item.name }}",
+  "Dns": [],
+  "DnsSearch": [],
+  "Identifier": "{{ item.name }}",
+  "ListenPort": {{ item.port | int }},
+  "Mode": "server",
+  "Mtu": 1420,
+  "PeerDefAllowedIPs": {{ item.peer_defaults.allowed_ips | to_json }},
+  "PeerDefDns": {{ item.peer_defaults.dns | to_json }},
+  "PeerDefEndpoint": "{{ hostname }}.{{ domain }}:{{ item.port }}",
+  "PeerDefMtu": 1420,
+  "PeerDefNetwork": ["{{ item.cidr }}"],
+  "PeerDefPersistentKeepalive": {{ item.peer_defaults.keepalive | default(16) | int }},
+  "PostUp": "iptables -t nat -A POSTROUTING -s {{ item.cidr }} -o ens18 -j MASQUERADE; iptables -A INPUT -p udp -m udp --dport {{ item.port }} -j ACCEPT; iptables -A FORWARD -i {{ item.name }} -j ACCEPT; iptables -A FORWARD -o {{ item.name }} -j ACCEPT",
+  "PostDown": "iptables -t nat -D POSTROUTING -s {{ item.cidr }} -o ens18 -j MASQUERADE; iptables -D INPUT -p udp -m udp --dport {{ item.port }} -j ACCEPT; iptables -D FORWARD -i {{ item.name }} -j ACCEPT; iptables -D FORWARD -o {{ item.name }} -j ACCEPT",
+  "PrivateKey": "{{ interface_template.json.PrivateKey }}",
+  "PublicKey": "{{ interface_template.json.PublicKey }}",
+  "SaveConfig": true
+}
