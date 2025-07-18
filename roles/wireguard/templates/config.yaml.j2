@@ -1,0 +1,57 @@
+core:
+  admin_user: {{ admin_user }}
+  admin_password: {{ admin_password }}
+  admin_api_token: {{ admin_api_token }}
+  import_existing: false
+  create_default_peer: true
+  self_provisioning_allowed: true
+
+web:
+  site_title: My WireGuard Server
+  site_company_name: Homelab
+  listening_address: :51821
+  external_url: https://{{ hostname }}.{{ domain }}
+  csrf_secret: {{ csrf_secret }}
+  session_secret: {{ session_secret }}
+  request_logging: true
+
+advanced:
+  log_level: trace
+  log_pretty: true
+  log_json: false
+  config_storage_path: /etc/wireguard
+  expiry_check_interval: 5m
+
+database:
+  debug: true
+  type: sqlite
+  dsn: /app/data/sqlite.db
+{% if oidc_enabled %}
+auth:
+  callback_url_prefix:  https://{{ hostname }}.{{ domain }}/api/v0
+  oidc:
+    - id: oidc-with-admin-group
+      provider_name: wireguard
+      display_name: Login with</br>Authentik
+      base_url: https://oidc.{{ domain }}/application/o/wireguard/
+      client_id: {{ oidc_client_id }}
+      client_secret: {{ oidc_client_secret }}
+      extra_scopes:
+        - email
+        - profile
+        - given_name
+        - groups
+        - openid
+      field_map:
+        user_identifier: sub
+        email: email
+        firstname: given_name
+        lastname: given_name
+        user_groups: groups
+{% if oidc_admin_group is defined %}
+      admin_mapping:
+        admin_group_regex: ^{{ oidc_admin_group }}$
+{% endif %}
+      registration_enabled: true
+      log_user_info: true
+{% endif %}

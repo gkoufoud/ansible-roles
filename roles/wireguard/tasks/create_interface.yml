@@ -1,0 +1,95 @@
+- name: Set authorization_header
+  ansible.builtin.set_fact:
+    authrization_header: "{{ (admin_user ~':'~ admin_api_token) | b64encode }}"
+
+- name: Check if interface exists
+  uri:
+    status_code: 200, 404
+    url: "http://{{ ansible_default_ipv4.address }}:51821/api/v1/interface/by-id/{{ item.name }}"
+    method: GET
+    headers:
+      authorization: "Basic {{ authrization_header }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: existing_interface
+
+- name: Create interface
+  when: existing_interface.status == 404
+  block:
+
+    - name: Generate interface keys
+      uri:
+        status_code: 200
+        url: "http://{{ ansible_default_ipv4.address }}:51821/api/v1/interface/prepare"
+        method: GET
+        headers:
+          authorization: "Basic {{ authrization_header }}"
+          Content-Type: "application/json"
+        return_content: true
+      register: interface_template
+
+    - name: Render interface payload
+      set_fact:
+        interface_payload: "{{ lookup('template', 'interface_payload.json.j2') }}"
+
+
+    - name: Create interface
+      uri:
+        url: "http://{{ ansible_default_ipv4.address }}:51821/api/v1/interface/new"
+        method: POST
+        headers:
+          authorization: "Basic {{ authrization_header }}"
+          Content-Type: "application/json"
+        body_format: json
+        body: "{{ interface_payload }}"
+        status_code: 200
+        return_content: true
+      register: new_interface
+
+    - name: Get new interface details
+      uri:
+        status_code: 200, 404
+        url: "http://{{ ansible_default_ipv4.address }}:51821/api/v1/interface/by-id/{{ item.name }}"
+        method: GET
+        headers:
+          authorization: "Basic {{ authrization_header }}"
+          Content-Type: "application/json"
+        return_content: true
+      register: new_interface_details
+
+    - name: Set existing interface
+      set_fact:
+        existing_interface: "{{ new_interface_details }}"
+
+
+- name: Get peer list
+  uri:
+    status_code: 200, 404
+    url: "http://{{ ansible_default_ipv4.address }}:51821/api/v1/peer/by-interface/{{ item.name }}"
+    method: GET
+    headers:
+      authorization: "Basic {{ authrization_header }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: peer_list
+
+- name: Filter out peers that already exist
+  set_fact:
+    peers_filtered: >-
+      {{
+        item.peers | rejectattr(
+          'name',
+          'in',
+          peer_list.json | map(attribute='DisplayName') | list
+        ) | list
+      }}
+
+- name: Create peers
+  include_tasks: create_peer.yml
+  loop: "{{ peers_filtered }}"
+  loop_control:
+    loop_var: peer
+  vars:
+    interface_name: "{{ item.name }}"
+    auth: "{{ authrization_header }}"
+

@@ -1,0 +1,27 @@
+- name: Generate user template
+  uri:
+    status_code: 200
+    url: "http://{{ ansible_default_ipv4.address }}:51821/api/v1/peer/prepare/{{ interface_name }}"
+    method: GET
+    headers:
+      authorization: "Basic {{ auth }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: user_template
+
+- name: Render peer payload
+  set_fact:
+    peer_payload: "{{ lookup('template', 'peer_payload.json.j2') }}"
+
+- name: Create peer
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:51821/api/v1/peer/new"
+    method: POST
+    headers:
+      authorization: "Basic {{ auth }}"
+      Content-Type: "application/json"
+    body_format: json
+    body: "{{ peer_payload }}"
+    status_code: 200
+    return_content: true
+  register: new_peer

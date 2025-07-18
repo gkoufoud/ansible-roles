@@ -1,0 +1,54 @@
+- name: Ensure required variables are defined
+  ansible.builtin.assert:
+    that:
+      - vault_addr
+      - vault_mount_point is defined
+      - vault_secret_name
+      - vault_token is defined or (vault_token_key is defined and vault_token_file_path is defined)
+    fail_msg: >
+      Required variables not set. Ensure you define 'vault_secrets', vault_mount_point, and vault_token or vault_token_key and vault_token_file_path.
+
+- name: Retrieve token
+  when: vault_token is not defined
+  block:
+    - name: Read token file
+      ansible.builtin.command: >
+        awk -F= '$1=="{{ vault_token_key }}" {print $2}' {{ vault_token_file_path }}
+      register: token_result
+      changed_when: false
+    
+    - name: Register token
+      ansible.builtin.set_fact:
+        vault_token: "{{ token_result.stdout }}"
+
+- name: Get secret from Vault
+  ansible.builtin.uri:
+    url: "{{ vault_addr }}/v1/{{ vault_mount_point }}/data/{{ vault_secret_name }}"
+    method: GET
+    headers:
+      X-Vault-Token: "{{ vault_token }}"
+    return_content: true
+    status_code: 200, 404
+  register: vault_secret_result
+
+- name: Extract Vault secret data
+  when: vault_secret_result.status == 200
+  ansible.builtin.set_fact:
+    vault_secret_data: "{{ vault_secret_result.json.data.data }}"
+
+- name: Optionally write Vault secret to file
+  when: vault_secret_result.status == 200 and vault_secret_output_path is defined
+  ansible.builtin.copy:
+    dest: "{{ vault_secret_output_path }}"
+    content: |
+      {% for k, v in vault_secret_data.items() %}
+      {{ k }}={{ v }}
+      {% endfor %}
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Set vault_secret_data to empty json
+  when: vault_secret_result.status != 200
+  ansible.builtin.set_fact:
+    vault_secret_data: {}

@@ -1,11 +1,42 @@
 # ansible-roles
 This repository contains a list of ansible roles.
 ##Roles
-- [proxmox_template](#proxmox_template)
-- [vault_secret_store](#vault_secret_store)
-- [proxmox_vm](#proxmox_vm)
+- [cf_ddns](#cf_ddns)
 - [docker_install](#docker_install)
+- [proxmox_template](#proxmox_template)
+- [proxmox_vm](#proxmox_vm)
+- [vault_secret_fetch](#vault_secret_fetch)
+- [vault_secret_store](#vault_secret_store)
 - [vault](#vault)
+- [wireguard](#wireguard)
+
+### `cf_ddns`
+Install cloudflare ddns
+
+#### Required Variables
+- `base_dir`: The cf_ddns installation directory
+- `domain`: The cloudflare hosted domain name
+- `CLOUDFLARE_API_TOKEN` The cloudflare api token
+
+#### Optional Variables
+- `create_le_caa`: Default is `false` (Create let's encrypt CAA record)
+- `cnames`: Default is `[]` (List of domain names pointing to main domain)
+  
+#### Example
+```yaml
+vars:
+  base_dir: /opt/cf_ddns
+  create_le_caa: true
+  domain: "mydomain.com"
+  cnames:
+    - "*"
+    - "subdomain"
+    - "*.subdomain"
+  CLOUDFLARE_API_TOKEN: "mycloudflare-api-token"
+```
+
+### `docker_install`
+Install required packages
 
 ### `proxmox_template`
 Create a proxmox VM template
@@ -45,37 +76,6 @@ vars:
     username: "user"
     password: "password"
 ```
-### `vault_secret_store`
-Store/Update secrets in hashicorp vault
-
-#### Required Variables
-- `vault_secrets`: A list of maps with vault secrets
-- `vault_mount_point` The vault mount poin (path) to store the secrets to
-- `vault_token`: The vault token (required when vault_token_key and vault_token_file_path are not defined)
-- `vault_token_file_path`: The file where the vault token is saved (required when vault_token is not defined)
-- `vault_token_key`: Key in the vault token file where the token is defined (required when vault_token is not defined)
-
-#### Optional Variables
-- `force_update`: Default is `true`
-  
-#### Example
-```yaml
-vars:
-  vault_mount_point: homelab
-  vault_token_file_path: /opt/vault/tokens/init
-  vault_token_key: init_token
-  vault_secrets:
-    - name: "cloudflare"
-      data:
-        CLOUDFLARE_API_KEY: "my_cf_api_key"
-        CLOUDFLARE_EMAIL: "my_cf_email"
-        CLOUDFLARE_API_TOKEN: "my_cf_api_token"
-    - name: "localregistry"
-      data:
-        REGISTRY_ADMIN_USER: "admin"
-        REGISTRY_ADMIN_PASS: "my_admin_pass_123"
-```
-
 ### `proxmox_vm`
 Create proxmox virtual machines from a template
 
@@ -121,8 +121,64 @@ vars:
       ciuser: "myuser"
       cipassword: "mynewpass123"
 ```
-### `docker_install`
-Install required packages
+### `vault_secret_fetch`
+Fetch secret from hashicorp vault
+
+#### Required Variables
+- `vault_addr`: Vault base url
+- `vault_secret_name`: The vault secret name to fetch
+- `vault_mount_point` The vault mount poin (path) to store the secrets to
+- `vault_token`: The vault token (required when vault_token_key and vault_token_file_path are not defined)
+- `vault_token_file_path`: The file where the vault token is saved (required when vault_token is not defined)
+- `vault_token_key`: Key in the vault token file where the token is defined (required when vault_token is not defined)
+
+#### Optional Variables
+- `vault_secret_output_path`: Default is `null` (Stores secret in a file)
+
+#### Example
+```yaml
+vars:
+  vault_addr: "http://127.0.0.1:8200"
+  vault_secret_name: mycreds
+  vault_mount_point: homelab
+  vault_token_file_path: /opt/vault/tokens/init
+  vault_token_key: init_token
+```
+The value is returned to variable `vault_secret_data`
+
+
+### `vault_secret_store`
+Store/Update secrets in hashicorp vault
+
+#### Required Variables
+- `vault_addr`: Vault base url
+- `vault_secrets`: A list of maps with vault secrets
+- `vault_mount_point` The vault mount poin (path) to store the secrets to
+- `vault_token`: The vault token (required when vault_token_key and vault_token_file_path are not defined)
+- `vault_token_file_path`: The file where the vault token is saved (required when vault_token is not defined)
+- `vault_token_key`: Key in the vault token file where the token is defined (required when vault_token is not defined)
+
+#### Optional Variables
+- `force_update`: Default is `true`
+  
+#### Example
+```yaml
+vars:
+  vault_addr: "http://127.0.0.1:8200"
+  vault_mount_point: homelab
+  vault_token_file_path: /opt/vault/tokens/init
+  vault_token_key: init_token
+  vault_secrets:
+    - name: "cloudflare"
+      data:
+        CLOUDFLARE_API_KEY: "my_cf_api_key"
+        CLOUDFLARE_EMAIL: "my_cf_email"
+        CLOUDFLARE_API_TOKEN: "my_cf_api_token"
+    - name: "localregistry"
+      data:
+        REGISTRY_ADMIN_USER: "admin"
+        REGISTRY_ADMIN_PASS: "my_admin_pass_123"
+```
 
 ### `vault`
 Install hashicorp vault
@@ -150,5 +206,54 @@ vars:
   container_name: vault
   image: hashicorp/vault:1.19
   listen_port: 8200
+```
+
+### `wireguard`
+Install wireguard (wg-portal)
+
+#### Required Variables
+- `base_dir`: The wg-portal installation directory
+- `domain`: The wg-portal external domain
+- `hostname` The wg-portal hostname
+- `admin_user`: The wg-portal admin user
+- `admin_password`: The wg-portal admin password
+- `admin_api_token`: The wg-portal admin api token (uuid)
+- `csrf_secret`: The wg-portal csrf_secret
+- `session_secret`: The wg-portal session secret
+- `interfaces`: A list of interfaces
+
+#### Optional Variables
+- `image`: Default is `wgportal/wg-portal:v2.0.3`
+- `container_name`: Default is `wg-portal`
+- `oidc_enabled`: Default is `false`
+- `oidc_admin_group`: The wg-portal admin group mapped in oidc provider
+  
+#### Example
+```yaml
+vars:
+  base_dir: /opt/wireguard
+  interfaces:
+    - name: wg0
+      port: 51820
+      cidr: 10.11.12.0/24
+      peer_defaults:
+        allowed_ips: 
+          - 0.0.0.0/0
+        dns: 
+          - 8.8.8.8
+      peers:
+        - name: my-iphone
+        - name: my-macbook-pro
+  domain: "mydomain.com"
+  hostname: vpn
+  admin_user: "admin@mydomain.com"
+  admin_password: "myadminpass"
+  admin_api_token: "bd068c3d-84cf-4368-9a49-de86e239622f"
+  csrf_secret: "mycsrfsecret1234567890"
+  session_secret: "mysessionsecret0987654321"
+  oidc_enabled: true
+  oidc_client_id: "myoidcclientid"
+  oidc_client_secret: "myoidcclientsecret493258903453245"
+  oidc_admin_group: "wg-admin"
 ```
 

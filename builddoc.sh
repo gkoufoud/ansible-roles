@@ -5,7 +5,7 @@ pre_readme="./skel.pre"
 cat "$pre_readme" > README.md
 echo "" >> README.md
 
-readme_files=$(find ./roles -type f -name "README.md")
+readme_files=$(find ./roles -type f -name "README.md" | sort)
 
 echo "##Roles" >> README.md
 # Roles TOC

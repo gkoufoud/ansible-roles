@@ -8,7 +8,6 @@
       - vms is defined
     fail_msg: >
       Required variables not set. Ensure you define 'api_user', 'api_password', 'api_host', 'template_name', and 'vms'.
-  tags: always
 
 - name: Get template node
   command: >-

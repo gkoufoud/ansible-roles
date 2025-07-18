@@ -4,7 +4,6 @@
       - base_dir is defined
     fail_msg: >
       Required variables not set. Ensure you define 'base_dir'.
-  tags: always
 
 # - name: Get current group name
 #   ansible.builtin.command: id -gn
