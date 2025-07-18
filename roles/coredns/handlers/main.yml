@@ -1,0 +1,6 @@
+---
+- name: Restart CoreDNS
+  community.docker.docker_container:
+    name: "{{ container_name }}"
+    state: started
+    restart: true

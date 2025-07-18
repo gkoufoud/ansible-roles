@@ -1,0 +1,308 @@
+- name: Check if provider exists
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/providers/oauth2/?name={{ item.name }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: existing_provider
+
+# - name: show var
+#   debug:
+#     msg: "{{ existing_provider }}"
+
+# curl -L '/api/v3/core/applications/' -H 'Accept: application/json' -H 'Authorization: Bearer LWl0b5Z6hGWNCWW'
+
+- name: Check if application exists
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/core/applications/{{ item.name }}/"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: existing_application
+  failed_when: false
+
+- name: Check if policy exists
+  uri:
+    url: >-
+      http://{{ ansible_default_ipv4.address }}:9000/api/v3/policies/all/?search={{
+        item.name | urlencode
+      }}
+    method: GET
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: existing_policy
+  failed_when: false
+
+- name: Initialize application groups
+  set_fact:
+    app_groups: []
+
+- name: Set application groups
+  when: "'groups' in item"
+  set_fact:
+    app_groups: "{{ app_groups + [app_group] }}"
+  loop: "{{ item.groups }}"
+  loop_control:
+    loop_var: app_group
+
+- name: Build policy expression
+  when: existing_policy.json.results | length == 0
+  set_fact:
+    expression: >-
+      {% if app_groups | length == 0 -%}
+      return True
+      {%- else -%}
+      return {% for g in app_groups -%}ak_is_group_member(request.user, name="{{ g }}"){% if not loop.last %} or {% endif %}{%- endfor %}
+      {%- endif %}
+
+- name: Create Authentik policy
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/policies/expression/"
+    method: POST
+    status_code: 200, 201
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+      execution_logging: false
+      expression: "{{ expression }}"
+    return_content: true
+  register: new_policy
+  when: existing_policy.json.results | length == 0
+
+- name: Get policy
+  uri:
+    url: >-
+      http://{{ ansible_default_ipv4.address }}:9000/api/v3/policies/all/?search={{
+        item.name | urlencode
+      }}
+    method: GET
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: existing_policy
+  failed_when: false
+
+- name: Create Authentik application
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/core/applications/"
+    method: POST
+    status_code: 200, 201
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+      slug: "{{ item.name }}"
+      open_in_new_tab: true
+      policy_engine_mode: "all"
+      meta_launch_url: "{{ item.application_url }}"
+    return_content: true
+  register: new_application
+  when: existing_application.status == 404
+
+- name: Get application data
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/core/applications/{{ item.name }}/"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: existing_application
+
+- name: Create Authentik policy binding
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/policies/bindings/"
+    method: POST
+    status_code: 200, 201
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      enabled: true
+      failure_result: false
+      negate: false
+      order: "0"
+      timeout: "30"
+      policy: "{{ existing_policy.json.results[0].pk }}"
+      target: "{{ existing_application.json.pk }}"
+    return_content: true
+  register: new_binding
+  when: "'skipped' not in new_policy"
+
+- name: Get default-provider-authorization-explicit-consent
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/flows/instances/?slug=default-provider-authorization-explicit-consent"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: authentik_flow_authorization
+  when: existing_provider.json.results | length == 0
+
+- name: Get default-provider-invalidation-flow
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/flows/instances/?slug=default-provider-invalidation-flow"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: authentik_flow_invalidation
+  when: existing_provider.json.results | length == 0
+
+  # To get these mappings execute: curl -L 'http://192.168.0.70:9000/api/v3/propertymappings/all/' -H 'Accept: application/json' -H 'Authorization: Bearer <your token>' | jq -r
+- name: Get default OAuth Mapping OpenID
+  uri:
+    url: >-
+      http://{{ ansible_default_ipv4.address }}:9000/api/v3/propertymappings/all/?name={{
+        "authentik default OAuth Mapping: OpenID 'openid'" | urlencode
+      }}
+    method: GET
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: authentik_mapping_openid
+  when: existing_provider.json.results | length == 0
+
+# - name: show var
+#   debug:
+#     msg: "{{ authentik_mapping_openid.json.results[0].pk }}"
+
+
+- name: Get default OAuth Mapping email
+  uri:
+    url: >-
+      http://{{ ansible_default_ipv4.address }}:9000/api/v3/propertymappings/all/?name={{
+        "authentik default OAuth Mapping: OpenID 'email'" | urlencode
+      }}
+    method: GET
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: authentik_mapping_email
+  when: existing_provider.json.results | length == 0
+
+# - name: show var
+#   debug:
+#     msg: "{{ authentik_mapping_email.json.results[0].pk }}"
+
+- name: Get default OAuth Mapping profile
+  uri:
+    url: >-
+      http://{{ ansible_default_ipv4.address }}:9000/api/v3/propertymappings/all/?name={{
+        "authentik default OAuth Mapping: OpenID 'profile'" | urlencode
+      }}
+    method: GET
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: authentik_mapping_profile
+  when: existing_provider.json.results | length == 0
+
+# - name: show var
+#   debug:
+#     msg: "{{ authentik_mapping_profile.json.results[0].pk }}"
+
+# To get these execute: curl -L 'http://192.168.0.70:9000/api/v3/crypto/certificatekeypairs/' -H 'Accept: application/json' -H 'Authorization: Bearer <your token>'
+- name: Get default certificate
+  uri:
+    url: >-
+      http://{{ ansible_default_ipv4.address }}:9000/api/v3/crypto/certificatekeypairs/?name={{
+        "authentik Self-signed Certificate" | urlencode
+      }}
+    method: GET
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: authentik_cert
+  when: existing_provider.json.results | length == 0
+
+# - name: show var
+#   debug:
+#     msg: "{{ authentik_cert.json.results[0].pk }}"
+
+
+- name: Create Authentik provider
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/providers/oauth2/"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+      access_code_validity: "minutes=1"
+      access_token_validity: "minutes=5"
+      authentication_flow: null
+      authorization_flow: "{{ authentik_flow_authorization.json.results[0].pk }}"
+      client_type: "confidential"
+      component: "ak-provider-oauth2-form"
+      encryption_key: null
+      include_claims_in_id_token: true
+      invalidation_flow: "{{ authentik_flow_invalidation.json.results[0].pk }}"
+      issuer_mode: "per_provider"
+      jwt_federation_providers: []
+      jwt_federation_sources: []
+      meta_model_name: "authentik_providers_oauth2.oauth2provider"
+      property_mappings: [
+          "{{ authentik_mapping_openid.json.results[0].pk }}",
+          "{{ authentik_mapping_email.json.results[0].pk }}",
+          "{{ authentik_mapping_profile.json.results[0].pk }}"
+      ]
+      redirect_uris: >-
+        {{
+          item.redirect_uris
+          | map('community.general.dict_kv', 'url')
+          | map('combine', {'matching_mode': 'strict'})
+          | list
+        }}
+      refresh_token_validity: "days=30"
+      signing_key: "{{ authentik_cert.json.results[0].pk }}"
+      sub_mode: "user_email"
+    status_code: 201,409
+    return_content: true
+  register: create_provider
+  when: existing_provider.json.results | length == 0
+
+- name: Get new provider data
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/providers/oauth2/?name={{ item.name }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: existing_provider
+  when: create_provider is defined
+
+- name: Assign provider to application
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/core/applications/{{ item.name }}/"
+    method: PATCH
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      provider: "{{ existing_provider.json.results[0].pk }}"
+    status_code: 200
+

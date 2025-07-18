@@ -1,0 +1,83 @@
+- name: Ensure required variables are defined
+  ansible.builtin.assert:
+    that:
+      - base_dir is defined
+      - domain is defined
+      - pg_pass is defined
+      - secret_key is defined
+      - bootstrap_pass is defined
+      - bootstrap_token is defined
+      - bootstrap_email is defined
+    fail_msg: >
+      Required variables not set. Ensure you define 'base_dir', 'domain', 'PG_PASS', 'AUTHENTIK_SECRET_KEY', 'AUTHENTIK_BOOTSTRAP_PASSWORD', 'AUTHENTIK_BOOTSTRAP_TOKEN', and 'AUTHENTIK_BOOTSTRAP_EMAIL'.
+
+- name: Gather facts from the node
+  ansible.builtin.setup:
+  run_once: true
+
+- name: Create authentik directories
+  file:
+    path: "{{ base_dir }}/{{ item }}"
+    state: directory
+    mode: '0600'
+  loop:
+    - ''
+
+- name: Render env
+  template:
+    src: "env.j2"
+    dest: "{{ base_dir }}/.env"
+    mode: '0600'
+
+- name: Reander docker-compose.yml
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ base_dir }}/docker-compose.yml"
+    mode: '0644'
+
+- name: Start authentik containers
+  ansible.builtin.shell: docker compose up -d
+  args:
+    chdir: "{{ base_dir }}"
+
+- name: Check Authentik readiness
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:9000/-/health/ready/"
+    method: GET
+    status_code: 200
+    return_content: false
+  register: authentik_readiness
+  failed_when: false
+  retries: 50
+  delay: 5
+  until: authentik_readiness.status is defined and authentik_readiness.status == 200
+
+- name: Check Authentik liveness
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:9000/-/health/live/"
+    method: GET
+    status_code: 200
+    return_content: false
+  register: authentik_liveness
+  failed_when: false
+  retries: 50
+  delay: 5
+  until: authentik_liveness.status is defined and authentik_liveness.status != -1
+
+- name: Ensure all Authentik groups exist
+  include_tasks: create_group.yml
+  loop: "{{ authentik_groups }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Ensure all Authentik users exist
+  include_tasks: create_user.yml
+  loop: "{{ authentik_users }}"
+  loop_control:
+    label: "{{ item.username }}"
+
+- name: Ensure all Authentik providers exist
+  include_tasks: create_provider.yml
+  loop: "{{ oidc_oauth2_providers }}"
+  loop_control:
+    label: "{{ item.name }}"

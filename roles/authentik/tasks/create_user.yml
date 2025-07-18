@@ -1,0 +1,86 @@
+
+- name: Get user group
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/core/groups/?name={{ user_group | urlencode }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: user_groups
+  loop: "{{ item.groups }}"
+  loop_control:
+    loop_var: user_group
+  when: " 'groups' in item"
+
+- name: Initialize user_group_ids variable
+  set_fact:
+    user_group_ids: []
+
+- name: Extract group ids
+  set_fact:
+    user_group_ids: "{{ user_group_ids + [group_id] }}"
+  vars:
+    group_id: >-
+      {{
+        user_groups_results.json.results[0].pk
+      }}
+  loop: "{{ user_groups.results }}"
+  loop_control:
+    loop_var: user_groups_results
+  no_log: true
+  when: " 'groups' in item"
+
+- name: Check if Authentik user exists
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/core/users/?username={{ item.username }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: existing_user
+
+- name: Create Authentik user
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/core/users/"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      name: "{{ item.name }}"
+      username: "{{ item.username }}"
+      email: "{{ item.email }}"
+      path: "users"
+      groups: "{{ user_group_ids }}"
+      type: "{{ item.type | default('internal' )}}"
+    status_code: 201,409
+  when: existing_user.json.results | length == 0
+
+- name: Get user id
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/core/users/?username={{ item.username }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    return_content: true
+  register: existing_user
+
+- name: Add user to group
+  uri:
+    url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/core/groups/{{ user_group_id }}/add_user/"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ bootstrap_token }}"
+      Content-Type: "application/json"
+    body_format: json
+    body:
+      pk: "{{ existing_user.json.results[0].pk }}"
+    status_code: 204
+  loop: "{{ user_group_ids }}"
+  loop_control:
+    loop_var: user_group_id
+  when: " 'groups' in item"

@@ -1,0 +1,56 @@
+- name: Ensure required variables are defined
+  ansible.builtin.assert:
+    that:
+      - base_dir is defined
+    fail_msg: >
+      Required variables not set. Ensure you define 'base_dir'.
+
+- name: Gather facts from the node
+  ansible.builtin.setup:
+  run_once: true
+
+- name: Create CoreDNS directories
+  file:
+    path: "{{ base_dir }}/{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - ''
+    - zones
+
+- name: Template Corefile
+  template:
+    src: Corefile.j2
+    dest: "{{ base_dir }}/Corefile"
+    mode: '0644'
+  notify: Restart CoreDNS
+
+- name: Render each zone file
+  template:
+    src: zone.db.j2
+    dest: "{{ base_dir }}/zones/{{ item.file }}"
+    mode: '0644'
+  loop: "{{ zones }}"
+  loop_control:
+    label: "{{ item.name }}"
+  vars:
+    zone: "{{ item }}"
+  notify: Restart CoreDNS
+
+- name: Run CoreDNS container
+  community.docker.docker_container:
+    name: "{{ container_name }}"
+    image: "{{ image }}"
+    restart_policy: unless-stopped
+    state: started
+    published_ports:
+      - "53:53/udp"
+      - "53:53/tcp"
+    volumes:
+      - "{{ base_dir }}/Corefile:/Corefile:ro"
+      - "{{ base_dir }}/zones:/zones:ro"
+    command: -conf /Corefile
+
+- name: show var
+  debug:
+    msg: "{{ zones }}"

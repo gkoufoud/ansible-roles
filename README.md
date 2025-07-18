@@ -1,7 +1,9 @@
 # ansible-roles
 This repository contains a list of ansible roles.
 ##Roles
+- [authentik](#authentik)
 - [cf_ddns](#cf_ddns)
+- [coredns](#coredns)
 - [docker_install](#docker_install)
 - [proxmox_template](#proxmox_template)
 - [proxmox_vm](#proxmox_vm)
@@ -9,6 +11,72 @@ This repository contains a list of ansible roles.
 - [vault_secret_store](#vault_secret_store)
 - [vault](#vault)
 - [wireguard](#wireguard)
+
+### `authentik`
+Install Authentik, create groups, users and oidc_providers
+
+#### Required Variables
+- `base_dir`: The authentik installation directory
+- `domain`: The authentik domain name
+- `pg_pass`: The authentik postgres password
+- `secret_key`: The authentik secret key
+- `bootstrap_pass`: The authentik bootstrap password
+- `bootstrap_token`: The authentik bootstrap token
+- `bootstrap_email`: The authentik bootstrap email
+
+#### Optional Variables
+- `authentik_users`: Default is `[]` (List of users to create)
+- `authentik_groups`: Default is `[]` (List of groups to create)
+- `oidc_oauth2_providers`: Default is `[]` (List of oidc/oauth2 providers to create)
+  
+#### Example
+```yaml
+vars:
+  base_dir: /opt/authentik
+  authentik_users:
+    - username: "johndoe"
+      name: "John Doe"
+      email: "johndoe@example.com"
+      groups: ["authentik Admins", "vault-admin", "wg-user"]
+    - username: "janedoe"
+      name: "Jane Doe"
+      email: "janedoe@example.com"
+      groups: ["nextcloud-admin", "registry-ui-user"]
+  groups:
+    - name: "vault-admin"
+    - name: "vault-reader"
+    - name: "vault-homelab-admin"
+    - name: "vault-homelab-reader"
+    - name: "proxmox-admin"
+    - name: "wg-admin"
+    - name: "wg-user"
+    - name: "nextcloud-admin"
+    - name: "nextcloud-user"
+    - name: "registry-ui-user"
+  oidc_oauth2_providers:
+    - name: "wireguard"
+      application_url: https://vpn.example.com:443
+      redirect_uris:
+        - https://vpn.example.com:443
+        - https://vpn.example.com/app/*
+        - http://localhost:51821
+      groups:
+        - "wg-admin"
+        - "wg-user"
+    - name: "nextcloud"
+      application_url: https://box.example.com:443
+      redirect_uris:
+        - http://box.example.com/apps/sociallogin/custom_oidc/Authentik
+      groups:
+        - "nextcloud-admin"
+        - "nextcloud-user"
+  pg_pass: "supersecretpass123"
+  secret_key: "supersecretkey123"
+  bootstrap_email: "admin@example.com"
+  bootstrap_pass: "supersecretbootstrapPass123"
+  bootstrap_token: "supeRs3cr3tToken321"
+  domain: "example.com"
+```
 
 ### `cf_ddns`
 Install cloudflare ddns
@@ -33,6 +101,36 @@ vars:
     - "subdomain"
     - "*.subdomain"
   CLOUDFLARE_API_TOKEN: "mycloudflare-api-token"
+```
+
+### `coredns`
+Install Coredns, and create zones
+
+#### Required Variables
+- `base_dir`: The coredns installation directory
+
+#### Optional Variables
+- `container_name`: Default is `coredns`
+- `image`: Default is `coredns/coredns:1.12.2`
+- `upstream_dns`: Default is `["1.1.1.1", "8.8.8.8"]` (List of upstream dns servers)
+- `zones`: Default is `[]` (List of zones to create)
+  
+#### Example
+```yaml
+vars:
+  base_dir: /opt/coredns
+  container_name: coredns
+  image: coredns/coredns:1.12.2
+  upstream_dns:
+    - 8.8.8.8
+    - 8.8.4.4
+  zones:
+    - name: "example.com"
+      file: "example.com.db"
+      hosts:
+        '*': ansible_host,
+        'gw': "192.168.1.1"
+        'mypc': '192.168.1.100' 
 ```
 
 ### `docker_install`

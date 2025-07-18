@@ -1,0 +1,6 @@
+container_name: coredns
+image: coredns/coredns:1.12.2
+upstream_dns:
+  - 1.1.1.1
+  - 8.8.8.8
+zones: []
