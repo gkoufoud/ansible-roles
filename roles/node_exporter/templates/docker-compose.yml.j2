@@ -1,0 +1,21 @@
+networks:
+  node_exporter:
+    driver: bridge
+services: 
+  node-exporter: 
+    image: "{{ image }}"
+    container_name: "{{ container_name }}"
+    restart: unless-stopped 
+    volumes: 
+      - /proc:/host/proc:ro 
+      - /sys:/host/sys:ro 
+      - /:/rootfs:ro 
+    command: 
+      - '--path.procfs=/host/proc' 
+      - '--path.rootfs=/rootfs' 
+      - '--path.sysfs=/host/sys' 
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)' 
+    ports: 
+      - {{ lister_port }}:9100
+    networks:
+      - node_exporter
