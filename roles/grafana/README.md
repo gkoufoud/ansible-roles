@@ -10,7 +10,6 @@ Install Grafana
 - `container_name`: Default is `grafana`
 - `lister_port`: Default is `3000`
 - `plugins`: Default is `""`
-- `prometheus_url`: Default is `http://localhost:9090`
   
 #### Example
 ```yaml
@@ -22,5 +21,4 @@ vars:
   container_name: "grafana"
   lister_port: 3000
   plugins: "grafana-clock-panel, grafana-simple-json-datasource"
-  prometheus_url: "http://192.168.1.88:9090"
 ```
