@@ -10,3 +10,5 @@ services:
       - "{{ base_dir }}/config/config.yaml:/app/config/config.yaml:ro"
     network_mode: "host"
     restart: unless-stopped
+    ports:
+      - 8787:8787
