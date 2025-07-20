@@ -1,0 +1,5 @@
+image: grafana/grafana:12.0.2
+container_name: grafana
+lister_port: 3000
+plugins: ""
+prometheus_url: "http://localhost:9090"
