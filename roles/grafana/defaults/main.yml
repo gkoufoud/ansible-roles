@@ -5,4 +5,4 @@ plugins: ""
 service_account_name: ""
 service_account_token_name: ""
 service_account_token_filename: "automation-token.json"
-
+extra_environment_vars: []
