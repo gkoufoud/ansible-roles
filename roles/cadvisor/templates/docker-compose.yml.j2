@@ -1,0 +1,13 @@
+services: 
+  cadvisor: 
+    image: "{{ image }}"
+    container_name: "{{ container_name }}"
+    restart: unless-stopped 
+    volumes: 
+      - /:/rootfs:ro 
+      - /var/run:/var/run:rw 
+      - /sys:/sys:ro 
+      - /var/lib/docker/:/var/lib/docker:ro
+    network_mode: host
+    command:
+      - '-port={{lister_port}}'

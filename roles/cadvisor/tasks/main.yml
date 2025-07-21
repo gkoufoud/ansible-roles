@@ -1,0 +1,29 @@
+- name: Ensure required variables are defined
+  ansible.builtin.assert:
+    that:
+      - base_dir is defined
+    fail_msg: >
+      Required variables not set. Ensure you define 'base_dir'.
+
+- name: Gather facts from the node
+  ansible.builtin.setup:
+  run_once: true
+
+- name: Create cadvisor directories
+  file:
+    path: "{{ base_dir }}/{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - ''
+
+- name: Render docker-compose.yml.j2
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ base_dir }}/docker-compose.yml"
+    mode: "0644"
+
+- name: Start cadvisor
+  ansible.builtin.shell: docker compose up -d
+  args:
+    chdir: "{{ base_dir }}"
