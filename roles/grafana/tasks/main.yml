@@ -18,6 +18,7 @@
     mode: '0755'
   loop:
     - ''
+    - 'tokens'
     - 'data'
     - 'provisioning'
     - 'provisioning/datasources'
@@ -32,3 +33,121 @@
   ansible.builtin.shell: docker compose up -d
   args:
     chdir: "{{ base_dir }}"
+
+- name: Check Grafana readiness
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:3000/api/health"
+    method: GET
+    status_code: 200
+    return_content: false
+  register: grafana_readiness
+  failed_when: false
+  retries: 50
+  delay: 5
+  until: grafana_readiness.status is defined and grafana_readiness.status == 200
+
+- name: Create service-account
+  when: service_account_name | length > 0
+  block:
+    - name: Query for service account
+      uri:
+        url: "http://127.0.0.1:3000/api/serviceaccounts/search?query={{ service_account_name }}"
+        method: GET
+        user: "{{ admin_user }}"
+        password: "{{ admin_pass }}"
+        force_basic_auth: true
+        return_content: true
+      register: search_result
+
+    - name: Check if exact service account exists
+      set_fact:
+        existing_service_account: >-
+          {{
+            search_result.json.serviceAccounts
+            | selectattr('name', 'equalto', service_account_name)
+            | list
+            | first | default(None)
+          }}
+      when: search_result is defined
+
+    - name: Create service account if it does not exist
+      uri:
+        url: "http://127.0.0.1:3000/api/serviceaccounts"
+        method: POST
+        user: "{{ admin_user }}"
+        password: "{{ admin_pass }}"
+        force_basic_auth: true
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          name: "{{ service_account_name }}"
+          role: "Admin"
+        status_code: 201
+      register: created_service_account
+      when: "'name' not in existing_service_account"
+
+- name: Create service-account token
+  when: service_account_name | length > 0 and service_account_token_name | length > 0
+  block:
+    - name: Query for service account
+      uri:
+        url: "http://127.0.0.1:3000/api/serviceaccounts/search?query={{ service_account_name }}"
+        method: GET
+        user: "{{ admin_user }}"
+        password: "{{ admin_pass }}"
+        force_basic_auth: true
+        return_content: true
+      register: search_result
+
+    - name: Get the exact service account
+      set_fact:
+        existing_service_account: >-
+          {{
+            search_result.json.serviceAccounts
+            | selectattr('name', 'equalto', service_account_name)
+            | list
+            | first | default(None)
+          }}
+
+    - name: Get tokens for service account
+      uri:
+        url: "http://127.0.0.1:3000/api/serviceaccounts/{{ existing_service_account.id }}/tokens"
+        method: GET
+        user: "{{ admin_user }}"
+        password: "{{ admin_pass }}"
+        force_basic_auth: true
+        return_content: true
+      register: service_account_tokens
+
+    - name: Check if desired token already exists
+      set_fact:
+        existing_token: >-
+          {{
+            service_account_tokens.json
+            | selectattr('name', 'equalto', service_account_token_name)
+            | list
+            | first | default(None)
+          }}
+
+    - name: Create service account token
+      uri:
+        url: "http://127.0.0.1:3000/api/serviceaccounts/{{ existing_service_account.id }}/tokens"
+        method: POST
+        user: "{{ admin_user }}"
+        password: "{{ admin_pass }}"
+        force_basic_auth: true
+        headers:
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          name: "{{ service_account_token_name }}"
+      register: created_token
+      when: "'name' not in existing_token"
+
+    - name: Save new token to file
+      copy:
+        dest: "{{ base_dir }}/tokens/{{ service_account_token_filename }}"
+        content: "{{ created_token.json }}"
+        mode: '0600'
+      when: "'json' in created_token and service_account_token_filename | length > 0"

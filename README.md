@@ -154,6 +154,9 @@ Install Grafana
 - `container_name`: Default is `grafana`
 - `lister_port`: Default is `3000`
 - `plugins`: Default is `""`
+- `service_account_name`: Default is `""` (If set to a non-empty string it will create an Admin service account)
+- `service_account_token_name`: Default is `""` (If set to a non-empty string and service_account_name is also a non-empty string, it will create a token for the Admin service account)
+- `service_account_token_filename`: Default is `automation-token.json` (If set to a non-empty variable, the token is saved to file token/filename)
   
 #### Example
 ```yaml
