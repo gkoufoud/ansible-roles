@@ -11,6 +11,10 @@ services:
       - GF_SECURITY_ADMIN_USER={{ admin_user }}
       - GF_SECURITY_ADMIN_PASSWORD={{ admin_pass }}
       - GF_PLUGINS_PREINSTALL="{{plugins}}"
+{% for item in extra_environment_vars %}
+      - {{ item }}
+{% endfor %}
+
     volumes:
       - {{ base_dir }}/data:/var/lib/grafana
       - {{ base_dir }}/provisioning:/etc/grafana/provisioning
