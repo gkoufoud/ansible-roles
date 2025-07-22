@@ -1,0 +1,48 @@
+- name: Ensure required variables are defined
+  ansible.builtin.assert:
+    that:
+      - base_dir is defined
+      - secret_key is defined
+    fail_msg: >
+      Required variables not set. Ensure you define 'base_dir', 'secret_key'.
+
+- name: Gather facts from the node
+  ansible.builtin.setup:
+  run_once: true
+
+- name: Create Paperless-ngx directories
+  file:
+    path: "{{ base_dir }}/{{ item }}"
+    state: directory
+    mode: '0755'
+    owner: "{{ uid }}"
+    group: "{{ gid }}"
+  loop:
+    - ''
+    - 'data'
+    - 'data/redis'
+    - 'data/paperless'
+    - 'media'
+    - 'export'
+    - 'consume'
+
+- name: Render docker-compose.env.j2
+  ansible.builtin.template:
+    src: docker-compose.env.j2
+    dest: "{{ base_dir }}/docker-compose.env"
+    mode: "0600"
+    owner: "{{ uid }}"
+    group: "{{ gid }}"
+
+- name: Render docker-compose.yml.j2
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ base_dir }}/docker-compose.yml"
+    mode: "0600"
+    owner: "{{ uid }}"
+    group: "{{ gid }}"
+
+- name: Start paperless
+  ansible.builtin.shell: docker compose up -d
+  args:
+    chdir: "{{ base_dir }}"
