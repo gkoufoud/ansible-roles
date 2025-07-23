@@ -4,6 +4,7 @@ services:
     restart: unless-stopped
     volumes:
       - {{ base_dir }}/data/redis:/data
+    user: {{uid}}:{{gid}}
   webserver:
     image: {{ paperless_image }}
     container_name: {{ container_name }}
