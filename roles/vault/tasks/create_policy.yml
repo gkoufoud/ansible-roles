@@ -1,0 +1,16 @@
+- name: Create '{{ item.name }}' policy
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:{{ listen_port }}/v1/sys/policy/{{ item.name }}"
+    method: PUT
+    status_code: 204
+    body_format: json
+    headers:
+      X-Vault-Token: "{{ vault_root_token }}"
+    body:
+      policy: |
+        path "{{ item.path }}" {
+          capabilities = [{{ item.capabilities | map('to_json') | join(', ') }}]
+        }
+
+
+

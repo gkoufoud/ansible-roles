@@ -1,0 +1,24 @@
+- name: Check if secrets engine '{{ item.name }}/' is mounted
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:{{ listen_port }}/v1/sys/mounts"
+    method: GET
+    status_code: 200
+    headers:
+      X-Vault-Token: "{{ vault_root_token }}"
+    return_content: true
+  register: vault_mounts
+  changed_when: false
+
+- name: Enable '{{ item.name }}/' KV v2 secrets engine if not mounted
+  when: "item.name ~ '/' not in (vault_mounts.json | dict2items | map(attribute='key') | list)"
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:{{ listen_port }}/v1/sys/mounts/{{ item.name }}"
+    method: POST
+    status_code: 204
+    headers:
+      X-Vault-Token: "{{ vault_root_token }}"
+    body_format: json
+    body:
+      type: kv
+      options:
+        version: 2

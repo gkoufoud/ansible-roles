@@ -5,3 +5,4 @@ groupid: 100
 container_name: vault
 image: hashicorp/vault:1.19
 listen_port: 8200
+policies: []

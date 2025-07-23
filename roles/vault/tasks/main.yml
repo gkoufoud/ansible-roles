@@ -5,11 +5,6 @@
     fail_msg: >
       Required variables not set. Ensure you define 'base_dir'.
 
-# - name: Get current group name
-#   ansible.builtin.command: id -gn
-#   register: current_user_group
-#   changed_when: false
-
 - name: Install prerequisites
   apt:
     name:
@@ -146,163 +141,20 @@
         | list | first | regex_replace('^VAULT_ROOT_TOKEN_ID=', '')
       }}
 
-- name: Create 'vault-admin' policy
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:8200/v1/sys/policy/vault-admin"
-    method: PUT
-    status_code: 204
-    body_format: json
-    headers:
-      X-Vault-Token: "{{ vault_root_token }}"
-    body:
-      policy: |
-        path "*" {
-          capabilities = ["create", "read", "update", "delete", "list", "sudo"]
-        }
+- name: Create vault policies
+  include_tasks: create_policy.yml
+  loop: "{{ policies }}"
+  loop_control:
+    label: "{{ item.name }}"
 
-- name: Create 'vault-reader' policy
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:8200/v1/sys/policy/vault-reader"
-    method: PUT
-    status_code: 204
-    body_format: json
-    headers:
-      X-Vault-Token: "{{ vault_root_token }}"
-    body:
-      policy: |
-        path "*" {
-          capabilities = ["read", "list"]
-        }
+- name: Create vault tokens
+  include_tasks: create_token.yml
+  loop: "{{ tokens }}"
+  loop_control:
+    label: "{{ item.name }}"
 
-- name: Create 'homelab-admin' policy
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:8200/v1/sys/policy/homelab-admin"
-    method: PUT
-    status_code: 204
-    body_format: json
-    headers:
-      X-Vault-Token: "{{ vault_root_token }}"
-    body:
-      policy: |
-        path "homelab/*" {
-          capabilities = ["create", "read", "update", "delete", "list", "sudo"]
-        }
-
-- name: Create 'homelab-reader' policy
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:8200/v1/sys/policy/homelab-reader"
-    method: PUT
-    status_code: 204
-    body_format: json
-    headers:
-      X-Vault-Token: "{{ vault_root_token }}"
-    body:
-      policy: |
-        path "homelab/*" {
-          capabilities = ["read", "list"]
-        }
-
-- name: Check if homelab-admin token file exists
-  ansible.builtin.stat:
-    path: "{{ base_dir }}/tokens/homelab-admin"
-  register: homelab_admin_token_file
-
-- name: Read homelab-admin token from file (if exists)
-  when: homelab_admin_token_file.stat.exists
-  ansible.builtin.slurp:
-    path: "{{ base_dir }}/tokens/homelab-admin"
-  register: homelab_admin_token_slurp
-
-- name: Extract token from file (if exists)
-  when: homelab_admin_token_file.stat.exists
-  ansible.builtin.set_fact:
-    homelab_admin_token_id: >-
-      {{
-        (homelab_admin_token_slurp.content | b64decode).splitlines()
-        | select('match', '^HOMELAB_VAULT_TOKEN=')
-        | list | first | regex_replace('^HOMELAB_VAULT_TOKEN=', '')
-      }}
-
-- name: Check if existing token is valid
-  when: homelab_admin_token_id is defined and homelab_admin_token_id != ''
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:8200/v1/auth/token/lookup"
-    method: POST
-    status_code: 200
-    headers:
-      X-Vault-Token: "{{ vault_root_token }}"
-    body_format: json
-    body:
-      token: "{{ homelab_admin_token_id }}"
-  register: homelab_admin_token_lookup
-  failed_when: false
-  changed_when: false
-
-- name: Set flag if token is invalid or not found
-  set_fact:
-    create_homelab_admin_token: >-
-      {{
-        not homelab_admin_token_file.stat.exists
-        or homelab_admin_token_id == ''
-        or homelab_admin_token_id is not defined
-        or homelab_admin_token_lookup.status != 200
-      }}
-
-- name: Create homelab-admin token if missing or invalid
-  when: create_homelab_admin_token
-  block:
-
-    - name: Create a new token for 'homelab-admin' policy
-      ansible.builtin.uri:
-        url: "http://127.0.0.1:8200/v1/auth/token/create"
-        method: POST
-        status_code: 200
-        headers:
-          X-Vault-Token: "{{ vault_root_token }}"
-        body_format: json
-        body:
-          display_name: "homelab-admin"
-          policies: ["homelab-admin"]
-          ttl: "0"
-          renewable: true
-          orphan: true
-      register: homelab_admin_token_create
-      no_log: true
-
-    - name: Set homelab-admin token fact
-      ansible.builtin.set_fact:
-        homelab_admin_token_id: "{{ homelab_admin_token_create.json.auth.client_token }}"
-
-    - name: Save homelab-admin token to file
-      ansible.builtin.copy:
-        dest: "{{ base_dir }}/tokens/homelab-admin"
-        content: "HOMELAB_VAULT_TOKEN={{ homelab_admin_token_id }}\n"
-        owner: root
-        group: root
-        mode: '0600'
-      no_log: true
-
-- name: Check if secrets engine 'homelab/' is mounted
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:8200/v1/sys/mounts"
-    method: GET
-    status_code: 200
-    headers:
-      X-Vault-Token: "{{ vault_root_token }}"
-    return_content: true
-  register: vault_mounts
-  changed_when: false
-
-- name: Enable 'homelab/' KV v2 secrets engine if not mounted
-  when: "'homelab/' not in (vault_mounts.json | dict2items | map(attribute='key') | list)"
-  ansible.builtin.uri:
-    url: "http://127.0.0.1:8200/v1/sys/mounts/homelab"
-    method: POST
-    status_code: 204
-    headers:
-      X-Vault-Token: "{{ vault_root_token }}"
-    body_format: json
-    body:
-      type: kv
-      options:
-        version: 2
+- name: Create kv2 engines
+  include_tasks: create_kv2_engines.yml
+  loop: "{{ kv2_engines }}"
+  loop_control:
+    label: "{{ item.name }}"
