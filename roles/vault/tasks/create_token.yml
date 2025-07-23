@@ -1,0 +1,79 @@
+- name: Check if {{ item.name }} token file exists
+  ansible.builtin.stat:
+    path: "{{ base_dir }}/tokens/{{ item.name }}"
+  register: item_token_file
+
+- name: Read {{ item.name }} token from file (if exists)
+  when: item_token_file.stat.exists
+  ansible.builtin.slurp:
+    path: "{{ base_dir }}/tokens/{{ item.name }}"
+  register: item_token_slurp
+
+- name: Extract token from file (if exists)
+  when: item_token_file.stat.exists
+  ansible.builtin.set_fact:
+    item_token_id: >-
+      {{
+        (item_token_slurp.content | b64decode).splitlines()
+        | select('match', '^TOKEN=')
+        | list | first | regex_replace('^TOKEN=', '')
+      }}
+
+- name: Check if existing token is valid
+  when: item_token_id is defined and item_token_id != ''
+  ansible.builtin.uri:
+    url: "http://{{ ansible_host }}:{{ listen_port }}/v1/auth/token/lookup"
+    method: POST
+    status_code: 200
+    headers:
+      X-Vault-Token: "{{ vault_root_token }}"
+    body_format: json
+    body:
+      token: "{{ item_token_id }}"
+  register: item_token_lookup
+  failed_when: false
+  changed_when: false
+
+- name: Set flag if token is invalid or not found
+  set_fact:
+    create_item_token: >-
+      {{
+        not item_token_file.stat.exists
+        or item_token_id == ''
+        or item_token_id is not defined
+        or item_token_lookup.status != 200
+      }}
+
+- name: Create token if missing or invalid
+  when: create_item_token
+  block:
+
+    - name: Create a new token for '{{ item.name }}'
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}:{{ listen_port }}/v1/auth/token/create"
+        method: POST
+        status_code: 200
+        headers:
+          X-Vault-Token: "{{ vault_root_token }}"
+        body_format: json
+        body:
+          display_name: "{{ item.name }}"
+          policies: "{{ item.policies }}"
+          ttl: "0"
+          renewable: true
+          orphan: true
+      register: item_token_create
+      no_log: true
+
+    - name: Set token fact
+      ansible.builtin.set_fact:
+        item_token_id: "{{ item_token_create.json.auth.client_token }}"
+
+    - name: Save token to file
+      ansible.builtin.copy:
+        dest: "{{ base_dir }}/tokens/{{ item.name }}"
+        content: "TOKEN={{ item_token_id }}\n"
+        owner: root
+        group: root
+        mode: '0600'
+      no_log: true
