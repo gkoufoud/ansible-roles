@@ -39,3 +39,15 @@ services:
     image: {{ tika_image }}
     restart: unless-stopped
 {% endif %}
+
+{% if enable_metrics %}
+  exporter:
+    image: {{ exporter_image }}
+    restart: unless-stopped
+    init: true
+    ports:
+      - {{ metrics_listen_port }}:8081
+    env_file: exporter.env
+    volumes:
+      - {{ base_dir }}/exporter_auth_token.txt:/etc/exporter/auth-token.txt:ro
+{% endif %}

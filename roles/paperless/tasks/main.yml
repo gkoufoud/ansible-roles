@@ -42,7 +42,59 @@
     owner: "{{ uid }}"
     group: "{{ gid }}"
 
+- name: Touch exporter_auth_token.txt
+  when: enable_metrics
+  ansible.builtin.file:
+    path: "{{ base_dir }}/exporter_auth_token.txt"
+    owner: root
+    group: root
+    mode: '0600'
+    state: touch
+
 - name: Start paperless
   ansible.builtin.shell: docker compose up -d
   args:
     chdir: "{{ base_dir }}"
+
+- name: Enable metrics
+  when: enable_metrics
+  block:
+    - name: Create metrics user
+      community.docker.docker_container_exec:
+        container: "{{ container_name }}"
+        command: "python3 manage.py createsuperuser --noinput --username metrics --email metrics@localhost"
+      register: create_metrics_user
+      failed_when: "'Superuser created successfully' not in create_metrics_user.stdout and 'That username is already taken' not in create_metrics_user.stderr"
+
+
+    - name: Create metrics api token
+      community.docker.docker_container_exec:
+        container: "{{ container_name }}"
+        command: "python3 manage.py drf_create_token metrics"
+      register: paperless_metrics_token_creation
+
+    - name: Extract metrics API token from command output
+      set_fact:
+        paperless_metrics_api_token: "{{ paperless_metrics_token_creation.stdout_lines[-1].split()[2] }}"
+
+    - name: Create exporter.env file
+      ansible.builtin.copy:
+        dest: "{{ base_dir }}/exporter.env"
+        content: |
+          PAPERLESS_URL=http://webserver:8000
+          PAPERLESS_AUTH_TOKEN_FILE=/etc/exporter/auth-token.txt
+          PAPERLESS_SERVER_TIMEZONE={{ tz }}
+        owner: root
+        group: root
+        mode: '0600'
+      no_log: true
+
+    - name: Create exporter token file
+      ansible.builtin.copy:
+        dest: "{{ base_dir }}/exporter_auth_token.txt"
+        content: |
+          {{ paperless_metrics_api_token }}
+        owner: root
+        group: root
+        mode: '0600'
+      notify: Restart paperless-ngx-exporter
