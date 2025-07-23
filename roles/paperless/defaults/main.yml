@@ -1,6 +1,8 @@
 paperless_image: paperlessngx/paperless-ngx:2.17.1
 redis_image: docker.io/library/redis:8
 gotenberg_image: docker.io/gotenberg/gotenberg:8.20
+exporter_image: ghcr.io/hansmi/prometheus-paperless-exporter:v0.0.8
+metrics_listen_port: 8001
 tika_image: docker.io/apache/tika:3.2.1.0
 container_name: paperless
 enable_tika: true
@@ -12,3 +14,4 @@ url: ""
 tz: UTC
 default_ocr_lang: eng
 extra_ocr_lang: ""
+enable_metrics: false

@@ -232,8 +232,10 @@ Install Paperless-ngx
 - `paperless_image`: Default is `paperlessngx/paperless-ngx:2.17.1`
 - `redis_image`: Default is `docker.io/library/redis:8`
 - `gotenberg_image`: Default is `docker.io/gotenberg/gotenberg:8.20`
+- `exporter_image` Default is `ghcr.io/hansmi/prometheus-paperless-exporter:v0.0.8`
 - `container_name`: Default is `paperless`
 - `lister_port`: Default is `8000`
+- `metrics_listen_port`: Default is `8001`
 - `enable_tika`: Default is `true`
 - `extra_environment_vars`: Default is `[]` (Appends environment variables to the docker compose file)
 - `uid`: Default is `1000`
@@ -242,6 +244,7 @@ Install Paperless-ngx
 - `tz`: Default is `UTC`
 - `default_ocr_lang`: Default is `eng`
 - `extra_ocr_lang`: Default is `""`
+- `enable_metrics` Default is `false` (Deploy paperless-ngx-exporter)
   
 #### Example
 ```yaml
@@ -265,6 +268,8 @@ vars:
   tz: UTC
   default_ocr_lang: eng
   extra_ocr_lang: "ell"
+  enable_metrics: true
+  metrics_listen_port: 7491
 ```
 
 ### `proxmox_template`
