@@ -8,12 +8,6 @@
     return_content: true
   register: existing_provider
 
-# - name: show var
-#   debug:
-#     msg: "{{ existing_provider }}"
-
-# curl -L '/api/v3/core/applications/' -H 'Accept: application/json' -H 'Authorization: Bearer LWl0b5Z6hGWNCWW'
-
 - name: Check if application exists
   uri:
     url: "http://{{ ansible_default_ipv4.address }}:9000/api/v3/core/applications/{{ item.name }}/"
