@@ -1,0 +1,39 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: {{ loki_url }}
+
+scrape_configs:
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: varlogs
+          __path__: /var/log/*log
+{% if scrape_docker_logs %}
+  - job_name: docker_logs
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        regex: '(.*)'
+        target_label: container_name
+      - source_labels: ['__meta_docker_container_id']
+        regex: '([0-9a-f]+)'
+        target_label: container_id
+      - source_labels: ['__meta_docker_container_image_name']
+        regex: '([^:]+).*'
+        target_label: image_name
+      - source_labels: [__meta_docker_container_log_path]
+        regex: "/var/lib/docker/containers/(.*)/(.*)-json.log"
+        replacement: "/var/lib/docker/containers/$1/$2-json.log"
+        target_label: filename
+        separator: ''
+{% endif %}

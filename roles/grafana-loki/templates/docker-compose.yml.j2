@@ -1,0 +1,16 @@
+networks:
+  grafana_loki:
+    driver: bridge
+services:
+  loki:
+    image: "{{ image }}"
+    container_name: "{{ container_name }}"
+    restart: unless-stopped
+    command: "-config.file=/etc/loki/config.yaml"
+    ports:
+      - {{ lister_port }}:3100
+    volumes:
+      - {{ base_dir }}/config/config.yaml:/etc/loki/config.yaml:ro
+      - {{ base_dir }}/data:/loki:rw
+    networks:
+      - grafana_loki

@@ -1,0 +1,8 @@
+image: grafana/loki:3.4.1
+container_name: loki
+lister_port: 3100
+retention_period: 168h
+ingestion_rate_mb: 4
+ingestion_burst_size_mb: 6
+max_streams_per_user: 10000
+max_line_size: 256000
