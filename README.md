@@ -9,9 +9,11 @@ The roles are deployed in docker containers.
 - [cf_ddns](#cf_ddns)
 - [coredns](#coredns)
 - [docker_install](#docker_install)
+- [grafana-loki](#grafana-loki)
 - [grafana](#grafana)
 - [node_exporter](#node_exporter)
 - [paperless](#paperless)
+- [promtail](#promtail)
 - [proxmox_template](#proxmox_template)
 - [proxmox_vm](#proxmox_vm)
 - [vault_secret_fetch](#vault_secret_fetch)
@@ -163,6 +165,36 @@ vars:
 ### `docker_install`
 Install required packages
 
+### `grafana-loki`
+Install Grafana Loki
+
+#### Required Variables
+- `base_dir`: The Grafana Loki installation directory
+
+#### Optional Variables
+- `image`: Default is `grafana/loki:3.4.1`
+- `container_name`: Default is `loki`
+- `lister_port`: Default is `3100`
+- `retention_period`: Default is `168h`
+- `ingestion_rate_mb`: Default is `4`
+- `ingestion_burst_size_mb`: Default is `6`
+- `max_streams_per_user`: Default is `10000`
+- `max_line_size`: Default is `256000`
+
+#### Example
+```yaml
+vars:
+  base_dir: /opt/grafana_loki
+  container_name: "loki"
+  image: grafana/loki:3.4.1
+  port: 3100
+  retention_period: 168h
+  ingestion_rate_mb: 4
+  ingestion_burst_size_mb: 6
+  max_streams_per_user: 10000
+  max_line_size: 256000
+```
+
 ### `grafana`
 Install Grafana
 
@@ -270,6 +302,28 @@ vars:
   extra_ocr_lang: "ell"
   enable_metrics: true
   metrics_listen_port: 7491
+```
+
+### `promtail`
+Install Promtail
+
+#### Required Variables
+- `base_dir`: The Promtail installation directory
+- `loki_url`: The grafana loki url
+
+#### Optional Variables
+- `image`: Default is `grafana/promtail:3.5.3`
+- `container_name`: Default is `promtail`
+- `scrape_docker_logs:` Default is `true`
+
+#### Example
+```yaml
+vars:
+  base_dir: /opt/promtail
+  container_name: "promtail"
+  image: grafana/loki:3.4.1
+  loki_url: "http://192.168.1.100:3100/loki/api/v1/push"
+  scrape_docker_logs: true
 ```
 
 ### `proxmox_template`

@@ -1,0 +1,17 @@
+networks:
+  promtail:
+    driver: bridge
+services:
+  promtail:
+    image: "{{ image }}"
+    container_name: "{{ container_name }}"
+    command: "-config.file=/mnt/config/config.yaml"
+    volumes:
+      - {{ base_dir }}/config/config.yaml:/mnt/config/config.yaml:ro
+      - /var/log:/var/log:ro
+{% if scrape_docker_logs %}
+      - /var/run/docker.sock:/var/run/docker.sock
+{% endif %}
+    restart: unless-stopped
+    networks:
+      - promtail

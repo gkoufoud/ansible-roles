@@ -1,0 +1,52 @@
+- name: Ensure required variables are defined
+  ansible.builtin.assert:
+    that:
+      - base_dir is defined
+    fail_msg: >
+      Required variables not set. Ensure you define 'base_dir'.
+
+- name: Gather facts from the node
+  ansible.builtin.setup:
+  run_once: true
+
+- name: Create grafana loki directories
+  file:
+    path: "{{ base_dir }}/{{ item }}"
+    state: directory
+    mode: '0755'
+    owner: "10001"
+    group: "10001"
+  loop:
+    - ''
+    - 'config'
+    - 'data'
+
+- name: Render config.yaml.j2
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ base_dir }}/config/config.yaml"
+    mode: "0600"
+    owner: 10001
+
+- name: Render docker-compose.yml.j2
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ base_dir }}/docker-compose.yml"
+    mode: "0600"
+
+- name: Start grafana loki
+  ansible.builtin.shell: docker compose up -d
+  args:
+    chdir: "{{ base_dir }}"
+
+# - name: Check Grafana readiness
+#   ansible.builtin.uri:
+#     url: "http://127.0.0.1:3000/api/health"
+#     method: GET
+#     status_code: 200
+#     return_content: false
+#   register: grafana_readiness
+#   failed_when: false
+#   retries: 50
+#   delay: 5
+#   until: grafana_readiness.status is defined and grafana_readiness.status == 200
